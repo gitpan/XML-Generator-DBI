@@ -1,4 +1,4 @@
-# $Id: Makefile.PL,v 1.4 2002/02/07 17:35:14 matt Exp $
+# $Id: Makefile.PL,v 1.5 2003/08/18 17:04:41 matt Exp $
 
 use strict;
 use ExtUtils::MakeMaker;
@@ -9,6 +9,7 @@ WriteMakefile(
     'PREREQ_PM' => {
         'MIME::Base64' => 2.00,
         'XML::SAX::Base' => 1.00,
+        'Test::More' => 0,
     },
     'ABSTRACT_FROM' => 'DBI.pm',
     'AUTHOR' => 'Matt Sergeant <matt@sergeant.org>',

@@ -7,11 +7,9 @@ the outdated DBIx::XML_RDB, since it is better in many many ways.
 
 INSTALLATION
 
-Before installation, edit the file PWD in this directory. This contains
-connection information to test against. It needs to work or the
-tests will fail. Oh, you also need XML::Handler::YAWriter for the
-second test file to be performed. But it will just pass if you don't
-have it.
+In order to run the tests you need DBD::SQLite 0.27 installed, but
+they will run cleanly without DBD::SQLite installed (it just won't
+execute any SQL!).
 
 Then simply do the usual jiggery pokery:
 
