@@ -31,21 +31,26 @@ my ($user, $pwd, $driver, $extra, $query) = read_config();
 
 my $dbh = DBI->connect("dbi:${driver}:${extra}", $user, $pwd);
 
+if (!$dbh) {
+	die "Couldn't connect to database. Did you set the parameters in the PWD file?\n";
+}
+
 my $generator = XML::Generator::DBI->new(
         Handler => $handler,
         dbh => $dbh,
+	Indent => 1,
         );
 ok($generator);
 
 my $str = $generator->execute($query);
 ok($str);
 
-warn($str);
+print($str, "\n");
 
 my $attrs = $generator->execute($query, undef, AsAttributes => 1, ShowColumns => 1);
 ok($attrs);
 
-warn($attrs)
+print($attrs, "\n")
 
 }
 

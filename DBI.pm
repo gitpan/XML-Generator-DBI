@@ -1,18 +1,15 @@
-# $Id: DBI.pm,v 1.2 2001/08/03 19:31:58 matt Exp $
+# $Id: DBI.pm,v 1.3 2002/02/07 17:21:56 matt Exp $
 
 package XML::Generator::DBI;
-use MIME::Base64;
-
 use strict;
-use vars qw($VERSION);
 
-$VERSION = '0.01';
+use MIME::Base64;
+use XML::SAX::Base;
 
-sub new {
-    my $class = shift;
-    my %p = @_;
-    return bless \%p, $class;
-}
+use vars qw($VERSION @ISA);
+
+$VERSION = '0.02';
+@ISA = ('XML::SAX::Base');
 
 sub execute {
     my $self = shift;
@@ -35,7 +32,16 @@ sub execute {
     # turn on throwing exceptions
     local $proxy->{dbh}->{RaiseError} = 1;
     
-    my $sth = $proxy->{dbh}->prepare($query);
+    my $sth;
+    if (ref($query)) {
+        # assume its a statement handle
+        $sth = $query;
+        $query = "Unknown - executing statement handle";
+    }
+    else {
+        $sth = $proxy->{dbh}->prepare($query);
+    }
+    
     my @bind;
     if (defined($bind)) {
         @bind = ref($bind) ? @{$bind} : ($bind);
@@ -49,7 +55,7 @@ sub execute {
             \( @row[ 0 .. $#{$names} ] )
         );
     
-    $proxy->{Handler}->start_document({});
+    $proxy->SUPER::start_document({});
     
     $proxy->send_start($params{RootElement});
     $proxy->send_start($params{QueryElement}, 1, query => $query);
@@ -68,16 +74,29 @@ sub execute {
         $proxy->send_start($params{ColumnsElement}, 2);
         foreach my $i (0 .. $#{$names}) {
             my $type_info = $proxy->{dbh}->type_info($types->[$i]);
-            $proxy->send_start($params{ColumnElement}, 3);
-            
-            $proxy->send_tag(name => $names->[$i], 4);
-            $proxy->send_tag(type => $type_info->{TYPE_NAME}, 4) if $type_info->{TYPE_NAME};
-            $proxy->send_tag(size => $type_info->{COLUMN_SIZE}, 4) if $type_info->{COLUMN_SIZE};
-            $proxy->send_tag(precision => $precision->[$i], 4) if defined($precision->[$i]);
-            $proxy->send_tag(scale => $scale->[$i], 4) if defined($scale->[$i]);
-            $proxy->send_tag(nullable => (!$null->[$i] ? "NOT NULL" : ($null->[$i] == 1 ? "NULL" : "UNKNOWN")), 4) if defined($null->[$i]);
-            
-            $proxy->send_end($params{ColumnElement}, 3);
+            if ($params{AsAttributes}) {
+                my %attribs;
+                $attribs{name} = $names->[$i];
+                $attribs{type} = $type_info->{TYPE_NAME} if $type_info->{TYPE_NAME};
+                $attribs{size} = $type_info->{COLUMN_SIZE} if $type_info->{COLUMN_SIZE};
+                $attribs{precision} = $precision->[$i] if defined($precision->[$i]);
+                $attribs{scale} = $scale->[$i] if defined($scale->[$i]);
+                $attribs{nullable} = (!$null->[$i] ? "NOT NULL" : ($null->[$i] == 1) ? "NULL" : "UNKNOWN") if defined($null->[$i]);
+                
+                $proxy->send_tag($params{ColumnElement}, undef, 3, %attribs);
+            }
+            else {
+                $proxy->send_start($params{ColumnElement}, 3);
+
+                $proxy->send_tag(name => $names->[$i], 4);
+                $proxy->send_tag(type => $type_info->{TYPE_NAME}, 4) if $type_info->{TYPE_NAME};
+                $proxy->send_tag(size => $type_info->{COLUMN_SIZE}, 4) if $type_info->{COLUMN_SIZE};
+                $proxy->send_tag(precision => $precision->[$i], 4) if defined($precision->[$i]);
+                $proxy->send_tag(scale => $scale->[$i], 4) if defined($scale->[$i]);
+                $proxy->send_tag(nullable => (!$null->[$i] ? "NOT NULL" : ($null->[$i] == 1 ? "NULL" : "UNKNOWN")), 4) if defined($null->[$i]);
+
+                $proxy->send_end($params{ColumnElement}, 3);
+            }
         }
         $proxy->send_end($params{ColumnsElement}, 2);
     }
@@ -85,20 +104,15 @@ sub execute {
     while ($sth->fetch) {
         # TODO: Handle binary data
         foreach (@row) {
-            if (contains_binary($_)) {
+            if (defined($_) && /[\x00-\x08\x0A-\x0C\x0E-\x19]/) {
                 # in foreach loops, $_ is an lvalue!
                 $_ = MIME::Base64::encode_base64($_);
             }
         }
         if ($params{AsAttributes}) {
-            my %attribs = map { $names->[$_] => $row[$_] } (0 .. $#{$names});
-            
-            # delete NULL attributes
-            my @to_delete;
-            while (my ($key, $value) = each(%attribs)) {
-                push @to_delete, $key unless defined($value);
-            }
-            delete @attribs{@to_delete};
+            my %attribs = map { $names->[$_] => $row[$_] } # create hash
+                          grep { defined $row[$_] } # remove undef ones
+                          (0 .. $#{$names});
             
             $proxy->send_tag($params{RowElement}, undef, 2, %attribs);
         }
@@ -113,7 +127,7 @@ sub execute {
     $proxy->send_end($params{QueryElement}, 1);
     $proxy->send_end($params{RootElement});
     
-    $proxy->{Handler}->end_document({});
+    $proxy->SUPER::end_document({});
 }
 
 # SAX utility functions
@@ -121,41 +135,32 @@ sub execute {
 sub send_tag {
     my $self = shift;
     my ($name, $contents, $indent, %attributes) = @_;
-    $self->{Handler}->characters({ Data => (" " x $indent) }) if $indent && !$self->{NoIndent};
-    $self->{Handler}->start_element({ Name => $name, Attributes => \%attributes });
-    $self->{Handler}->characters({ Data => $contents });
-    $self->{Handler}->end_element({ Name => $name, Attributes => \%attributes });
-    $self->new_line unless $self->{NoIndent};
+    $self->SUPER::characters({ Data => (" " x $indent) }) if $indent && $self->{Indent};
+    $self->SUPER::start_element({ Name => $name, Attributes => \%attributes });
+    $self->SUPER::characters({ Data => $contents });
+    $self->SUPER::end_element({ Name => $name });
+    $self->new_line if $self->{Indent};
 }
 
 sub send_start {
     my $self = shift;
     my ($name, $indent, %attributes) = @_;
-    $self->{Handler}->characters({ Data => (" " x $indent) }) if $indent && !$self->{NoIndent};
-    $self->{Handler}->start_element({ Name => $name, Attributes => \%attributes });
-    $self->new_line unless $self->{NoIndent};
+    $self->SUPER::characters({ Data => (" " x $indent) }) if $indent && $self->{Indent};
+    $self->SUPER::start_element({ Name => $name, Attributes => \%attributes });
+    $self->new_line if $self->{Indent};
 }
 
 sub send_end {
     my $self = shift;
     my ($name, $indent) = @_;
-    $self->{Handler}->characters({ Data => (" " x $indent) }) if $indent && !$self->{NoIndent};
-    $self->{Handler}->end_element({ Name => $name, Attributes => {} });
-    $self->new_line unless $self->{NoIndent};
+    $self->SUPER::characters({ Data => (" " x $indent) }) if $indent && $self->{Indent};
+    $self->SUPER::end_element({ Name => $name });
+    $self->new_line if $self->{Indent};
 }
 
 sub new_line {
     my $self = shift;
-    $self->{Handler}->characters({ Data => "\n" });
-}
-
-sub contains_binary {
-    my $val = shift;
-    local $^W;
-    if ($val =~ /[\x00-\x08\x0A-\x0C\x0E-\x19]/) {
-        return 1;
-    }
-    return 0;
+    $self->SUPER::characters({ Data => "\n" });
 }
 
 1;
@@ -263,11 +268,11 @@ QueryElement => "thequery". The default is "select".
 You can specify the row element name by passing the parameter
 RowElement => "item". The default is "row".
 
-=item NoIndent
+=item Indent
 
-The indenting will be as above, unless you specify the NoIndent
-parameter with a true value, which can reduce the size of the 
-generated results.
+By default this module does no indenting (which is different from
+the previous version). If you want the XML beautified, pass the
+Indent option with a true value.
 
 =item ShowColumns
 
