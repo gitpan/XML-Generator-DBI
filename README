@@ -1,0 +1,24 @@
+XML::Generator::DBI
+===================
+
+This module allows you to generate SAX events (and thus XML) from
+DBI database queries. It should be considered a replacement for
+the outdated DBIx::XML_RDB, since it is better in many many ways.
+
+INSTALLATION
+
+Before installation, edit the file PWD in this directory. This contains
+connection information to test against. It needs to work or the
+tests will fail. Oh, you also need XML::Handler::YAWriter for the
+second test file to be performed. But it will just pass if you don't
+have it.
+
+Then simply do the usual jiggery pokery:
+
+perl Makefile.PL
+make
+make test
+su
+make install
+
+And start plugging SAX stuff together.
