@@ -1,5 +1,14 @@
 Revision history for Perl extension XML::Generator::DBI.
 
+0.03
+    - Fixed bug where if Indent was on, newline got
+      sent after the last close tag, which is invalid in XML
+
+0.02
+    - Converted to use XML::SAX::Base
+    - Performance tweaks
+    - Indent is off by default
+    
 0.01  Thu Aug  2 17:47:34 2001
 	- original version; created by h2xs 1.19
 

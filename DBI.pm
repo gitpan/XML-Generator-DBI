@@ -1,4 +1,4 @@
-# $Id: DBI.pm,v 1.3 2002/02/07 17:21:56 matt Exp $
+# $Id: DBI.pm,v 1.4 2002/02/08 09:48:23 matt Exp $
 
 package XML::Generator::DBI;
 use strict;
@@ -8,7 +8,7 @@ use XML::SAX::Base;
 
 use vars qw($VERSION @ISA);
 
-$VERSION = '0.02';
+$VERSION = '0.03';
 @ISA = ('XML::SAX::Base');
 
 sub execute {
@@ -125,6 +125,7 @@ sub execute {
         }
     }
     $proxy->send_end($params{QueryElement}, 1);
+    local $self->{Indent} = 0; # don't send new_line after root
     $proxy->send_end($params{RootElement});
     
     $proxy->SUPER::end_document({});
